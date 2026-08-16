@@ -1,0 +1,51 @@
+import streamlit as st
+import cv2
+import numpy as np
+import pyttsx3  
+
+net = cv2.dnn.readNet("../model/dnn_model/yolo-tiny.weights", "../model/dnn_model/yolo-tiny.cfg")
+model = cv2.dnn_DetectionModel(net)
+model.setInputParams(size=(320, 320), scale=1/255)
+
+classes = []
+with open("../model/dnn_model/classes.txt", "r") as file_object:
+    for class_name in file_object.readlines():
+        class_name = class_name.strip()
+        classes.append(class_name)
+
+engine = pyttsx3.init()
+
+def estimate_distance(w):
+    constant_ratio = 20  
+    distance = constant_ratio / w
+    return distance * 10
+
+if st.button("Obstacle Detection"):
+    cap = cv2.VideoCapture(0)
+    FRAME_WINDOW = st.image([])
+    stop_button = st.button("Stop")
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        (class_ids, _, bboxes) = model.detect(frame)
+
+        if len(class_ids) == 0:
+            print("No object detected.")
+
+        for class_id, bbox in zip(class_ids, bboxes):
+            (x, y, w, h) = bbox
+            distance = estimate_distance(w)
+            class_name = classes[class_id]
+            cv2.putText(frame, f"{class_name} - Distance: {distance:.2f} meters", (x, y - 10), cv2.FONT_HERSHEY_PLAIN, 2, (200, 0, 50), 2)
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (200, 0, 50), 3)
+            engine.say(f"Detected {class_name} at {distance:.2f} meters")
+            engine.runAndWait()
+
+        if frame.shape[0] > 0 and frame.shape[1] > 0:
+            FRAME_WINDOW.image(frame)
+
+        if stop_button:
+            break
